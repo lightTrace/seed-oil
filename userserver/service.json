@@ -1,0 +1,13 @@
+{
+  "Id": "uservice",
+  "Name": "userservice",
+  "Tags": [
+    "primary"
+  ],
+  "Address": "192.168.1.5",
+  "Port": 8081,
+  "Check": {
+    "HTTP": "http://192.168.1.5:8081/health",
+    "interval": "5s"
+  }
+}
