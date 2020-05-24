@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/go-kit/kit/sd"
-	httptransport "github.com/go-kit/kit/transport/http"
 	"github.com/go-kit/kit/endpoint"
 	"github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/sd"
 	"github.com/go-kit/kit/sd/consul"
+	"github.com/go-kit/kit/sd/lb"
+	httptransport "github.com/go-kit/kit/transport/http"
 	"github.com/hashicorp/consul/api"
 	"gokit/client/service"
 	"io"
@@ -17,12 +18,10 @@ import (
 
 func main() {
 
-	config :=  api.DefaultConfig()
+	config := api.DefaultConfig()
 	config.Address = "192.168.1.5:8500"
-	apiClient,err := api.NewClient(config)
-	if err != nil{
+	apiClient, _ := api.NewClient(config)
 
-	}
 	client := consul.NewClient(apiClient)
 
 	var logger log.Logger
@@ -30,27 +29,32 @@ func main() {
 
 	tags := []string{"primary"}
 	//可实时查询服务实例的状态信息
-	instance := consul.NewInstancer(client,logger,"userservice",tags,true)
+	instance := consul.NewInstancer(client, logger, "userservice", tags, true)
 
-	f := func(serviceUrl string)(endpoint.Endpoint,io.Closer,error) {
-		tart,_ := url.Parse("http://" + serviceUrl)
-		return httptransport.NewClient("GET",tart,service.GetUserInfoRequest,service.GetUserInfoResponse).Endpoint(),nil,nil
+	f := func(serviceUrl string) (endpoint.Endpoint, io.Closer, error) {
+		tart, _ := url.Parse("http://" + serviceUrl)
+		return httptransport.NewClient("GET", tart, service.GetUserInfoRequest, service.GetUserInfoResponse).Endpoint(), nil, nil
 	}
-	endPointer := sd.NewEndpointer(instance,f,logger)
-	endpoints,err := endPointer.Endpoints()
-	if err != nil{
+	endPointer := sd.NewEndpointer(instance, f, logger)
+	endpoints, err := endPointer.Endpoints()
+	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println("服务有",len(endpoints),"条")
-	getUserInfo := endpoints[0]
+	fmt.Println("服务有", len(endpoints), "条")
 
-	ctx := context.Background()
+	myLb := lb.NewRoundRobin(endPointer)
 
-	res,err := getUserInfo(ctx,service.UserRequest{Uid:101})
-	if err != nil{
-		fmt.Println(err)
-		os.Exit(1)
+	for {
+		getUserInfo, _ := myLb.Endpoint()
+
+		ctx := context.Background()
+
+		res, err := getUserInfo(ctx, service.UserRequest{Uid: 101})
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		userInfo := res.(service.UserResponse)
+		fmt.Println(userInfo.Result)
 	}
-	userInfo := res.(service.UserResponse)
-	fmt.Println(userInfo.Result)
 }
