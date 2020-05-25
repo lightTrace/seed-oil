@@ -7,11 +7,12 @@ import (
 )
 
 var consulClient *consul.Client
-func init(){
-	config :=  api.DefaultConfig()
-	config.Address = "192.168.1.5:8500"
-	apiClient,err := api.NewClient(config)
-	if err != nil{
+
+func init() {
+	config := api.DefaultConfig()
+	config.Address = "127.0.0.1:8500"
+	apiClient, err := api.NewClient(config)
+	if err != nil {
 		log.Fatal(err)
 	}
 	client := consul.NewClient(apiClient)

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	httptransport "github.com/go-kit/kit/transport/http"
 	"github.com/gorilla/mux"
+	ratetool "gokit/tool/rate"
 	"gokit/userserver/service"
 	"gokit/userserver/util"
+	"golang.org/x/time/rate"
 	"log"
 	"net/http"
 	"os"
@@ -17,47 +19,53 @@ import (
 
 func main() {
 
-	name := flag.String("name","","服务名")
-	port := flag.Int("p",0,"服务端口")
+	name := flag.String("name", "", "服务名")
+	port := flag.Int("p", 0, "服务端口")
 	flag.Parse()
-	if *name == ""{
+	if *name == "" {
 		log.Fatal("请指定服务名")
 	}
-	if *port == 0{
+	if *port == 0 {
 		log.Fatal("请指定服务端口")
 	}
-	util.SetServiceInfo(*name,*port)
+	util.SetServiceInfo(*name, *port)
 
 	user := service.UserService{}
-	endpoint := service.GenUserEndpoint(&user)
-	userHandler := httptransport.NewServer(endpoint,service.DecodeUserRequest,service.EncodeResponse)
 
-	http.Handle("/user",userHandler)
+	limit := rate.NewLimiter(1, 5)
+	//使用无耦合的限流中间件包装handler
+	endpoint := ratetool.RateLimit(limit)(service.GenUserEndpoint(&user))
+	userHandler := httptransport.NewServer(endpoint, service.DecodeUserRequest, service.EncodeResponse)
+
+	http.Handle("/user", userHandler)
 
 	r := mux.NewRouter()
 	{
-		r.Methods("GET","DELETE").Path(`/user/{uid:\d+}`).Handler(userHandler)
+		r.Methods("GET", "DELETE").Path(`/user/{uid:\d+}`).Handler(userHandler)
 		r.Methods("GET").Path("/health").HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			writer.Header().Set("Content-type","application/json")
+			writer.Header().Set("Content-type", "application/json")
 			writer.Write([]byte(`{"status":"ok"}`))
 		})
 	}
 	errChan := make(chan error)
-	go(func() {
+	go (func() {
 		//注册服务
 		util.RegisterService()
-		if err := http.ListenAndServe(":" + strconv.Itoa(*port), r);err != nil{
+		if err := http.ListenAndServe(":"+strconv.Itoa(*port), r); err != nil {
 			log.Println(err)
 			errChan <- err
 		}
 	})()
 
-	go(func() {
+	go (func() {
+		//监听系统的退出信号
 		signalC := make(chan os.Signal)
-		signal.Notify(signalC,syscall.SIGINT,syscall.SIGTERM)
-		errChan <-fmt.Errorf("%s",<-signalC)
+		signal.Notify(signalC, syscall.SIGINT, syscall.SIGTERM)
+		errChan <- fmt.Errorf("%s", <-signalC)
 	})()
-	getErr := <- errChan
+	//一旦有异常信号进来就不阻塞退出服务
+	getErr := <-errChan
+	//优雅退出服务
 	util.UnRegisterService()
 	log.Println(getErr)
 }

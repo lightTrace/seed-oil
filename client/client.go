@@ -19,7 +19,7 @@ import (
 func main() {
 
 	config := api.DefaultConfig()
-	config.Address = "192.168.1.5:8500"
+	config.Address = "127.0.0.1:8500"
 	apiClient, _ := api.NewClient(config)
 
 	client := consul.NewClient(apiClient)
