@@ -32,12 +32,16 @@ func main() {
 
 	user := service.UserService{}
 
+	//每秒钟只能接受一个请求，但是可以容忍瞬间提高的5个请求
 	limit := rate.NewLimiter(1, 5)
 	//使用无耦合的限流中间件包装handler
 	endpoint := ratetool.RateLimit(limit)(service.GenUserEndpoint(&user))
-	userHandler := httptransport.NewServer(endpoint, service.DecodeUserRequest, service.EncodeResponse)
 
-	http.Handle("/user", userHandler)
+	//自定义error的解码
+	options := []httptransport.ServerOption{
+		httptransport.ServerErrorEncoder(util.MyErrorEncoder),
+	}
+	userHandler := httptransport.NewServer(endpoint, service.DecodeUserRequest, service.EncodeResponse, options...)
 
 	r := mux.NewRouter()
 	{
