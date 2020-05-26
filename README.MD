@@ -3,7 +3,7 @@
 * 学习这条路总是漫长且孤独的，聪明人也要下笨功夫，大家一起加油！莫愁前路无知己，天涯谁人不识君
 
 ## 服务与注册发现篇
-* 下载项目到本地：git clone git@github.com:lightTrace/seed-oil.git
+* 下载项目到本地：`git clone git@github.com:lightTrace/seed-oil.git`
 * 在启动项目前，需要有一个docker环境用来启动一个单机的consul
 * 假设你已经有了一个docker环境，启动consul的命令是：docker run -d --name=cs -p 8500:8500 consul agent -server -bootstrap -ui -client 0.0.0.0
 * 使用本机ip地址全局替换 /userserver/util/consul.go文件下的 reg.Address 变量值
