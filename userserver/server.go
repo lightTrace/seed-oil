@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	kitlog "github.com/go-kit/kit/log"
 	httptransport "github.com/go-kit/kit/transport/http"
 	"github.com/gorilla/mux"
+	logtool "gokit/tool/log"
 	ratetool "gokit/tool/rate"
 	"gokit/userserver/service"
 	"gokit/userserver/util"
@@ -30,12 +32,20 @@ func main() {
 	}
 	util.SetServiceInfo(*name, *port)
 
-	user := service.UserService{}
+	//go-kit的日志模块
+	var logger kitlog.Logger
+	{
+		logger = kitlog.NewLogfmtLogger(os.Stdout)
+		logger = kitlog.WithPrefix(logger, "go-kit", "1.0")
+		logger = kitlog.With(logger, "time", kitlog.DefaultTimestampUTC)
+		logger = kitlog.With(logger, "caller", kitlog.DefaultCaller)
+	}
 
+	user := service.UserService{}
 	//每秒钟只能接受一个请求，但是可以容忍瞬间提高的5个请求，超过的请求会报429
 	limit := rate.NewLimiter(1, 5)
-	//使用无耦合的限流中间件包装handler
-	endpoint := ratetool.RateLimit(limit)(service.GenUserEndpoint(&user))
+	//使用无耦合的限流中间件和日志中间件去包装handler
+	endpoint := ratetool.RateLimit(limit)(logtool.UserServiceLogger(logger)(service.GenUserEndpoint(&user)))
 
 	//自定义error的解码
 	options := []httptransport.ServerOption{
