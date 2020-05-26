@@ -1,60 +1,35 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"github.com/go-kit/kit/endpoint"
-	"github.com/go-kit/kit/log"
-	"github.com/go-kit/kit/sd"
-	"github.com/go-kit/kit/sd/consul"
-	"github.com/go-kit/kit/sd/lb"
-	httptransport "github.com/go-kit/kit/transport/http"
-	"github.com/hashicorp/consul/api"
-	"gokit/client/service"
-	"io"
-	"net/url"
-	"os"
+	"github.com/afex/hystrix-go/hystrix"
+	"github.com/prometheus/common/log"
+	"gokit/client/logic"
+	"time"
 )
 
 func main() {
+	//熔断配置
+	hystrixConfig := hystrix.CommandConfig{
+		Timeout:                2000,                 //熔断器的超时时间
+		MaxConcurrentRequests:  5,                    //最大并发
+		RequestVolumeThreshold: 3,                    //失败几次开始计算err占比
+		ErrorPercentThreshold:  20,                   //出现错误的占比超过20%的时候打开熔断器
+		SleepWindow:            int(time.Second * 5), //5秒后熔断器尝试开启半开状态，半开状态下熔断器尝试访问正常服务来恢复服务，不能让其一直熔断
 
-	config := api.DefaultConfig()
-	config.Address = "127.0.0.1:8500"
-	apiClient, _ := api.NewClient(config)
-
-	client := consul.NewClient(apiClient)
-
-	var logger log.Logger
-	logger = log.NewLogfmtLogger(os.Stdout)
-
-	tags := []string{"primary"}
-	//可实时查询服务实例的状态信息
-	instance := consul.NewInstancer(client, logger, "userservice", tags, true)
-
-	f := func(serviceUrl string) (endpoint.Endpoint, io.Closer, error) {
-		tart, _ := url.Parse("http://" + serviceUrl)
-		return httptransport.NewClient("GET", tart, service.GetUserInfoRequest, service.GetUserInfoResponse).Endpoint(), nil, nil
 	}
-	endPointer := sd.NewEndpointer(instance, f, logger)
-	endpoints, err := endPointer.Endpoints()
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("服务有", len(endpoints), "条")
-
-	myLb := lb.NewRoundRobin(endPointer)
-
-	for {
-		getUserInfo, _ := myLb.Endpoint()
-
-		ctx := context.Background()
-
-		res, err := getUserInfo(ctx, service.UserRequest{Uid: 101})
+	hystrix.ConfigureCommand("getUserInfo", hystrixConfig)
+	for i := 0; i < 10; i++ {
+		err := hystrix.Do("getUserInfo", func() error {
+			result, err := logic.GetUserInfo()
+			fmt.Println(result)
+			return err
+		}, func(e error) error {
+			fmt.Println("降级用户")
+			return e
+		})
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			log.Error(err)
 		}
-		userInfo := res.(service.UserResponse)
-		fmt.Println(userInfo.Result)
 	}
 }

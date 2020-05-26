@@ -32,7 +32,7 @@ func main() {
 
 	user := service.UserService{}
 
-	//每秒钟只能接受一个请求，但是可以容忍瞬间提高的5个请求
+	//每秒钟只能接受一个请求，但是可以容忍瞬间提高的5个请求，超过的请求会报429
 	limit := rate.NewLimiter(1, 5)
 	//使用无耦合的限流中间件包装handler
 	endpoint := ratetool.RateLimit(limit)(service.GenUserEndpoint(&user))
