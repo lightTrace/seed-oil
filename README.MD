@@ -16,4 +16,4 @@
 * [服务限流文档地址](https://github.com/lightTrace/seed-oil/tree/master/tool/rate)
 
 ## 服务熔断篇
-* 取消 /client/logic/getuserinfo.go的time.Sleep(time.Second * 3)注释,可以模拟熔断降级
+* 取消 /client/logic/getuserinfo.go的time.Sleep(time.Second * 3)注释（这里是模拟超时）,然后在/client目录下直接运行go run client.go，可以模拟熔断降级
